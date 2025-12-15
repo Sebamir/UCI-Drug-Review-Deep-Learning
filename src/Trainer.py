@@ -47,6 +47,104 @@ class WeightedTrainer(Trainer):
         return (loss, outputs) if return_outputs else loss
 
 
+def verify_gpu_setup(model, weights, train_dataset, validation_dataset):
+    """
+    Verifica que todo esté correctamente configurado para GPU.
+    """
+    print("=" * 60)
+    print("VERIFICACIÓN DE RECURSOS GPU")
+    print("=" * 60)
+    
+    # 1. GPU disponible
+    gpu_available = torch.cuda.is_available()
+    print(f"{'✓' if gpu_available else '✗'} GPU disponible: {gpu_available}")
+    
+    if gpu_available:
+        print(f"  - Dispositivo: {torch.cuda.get_device_name(0)}")
+        print(f"  - Memoria total: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
+        print(f"  - Memoria libre: {(torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)) / 1e9:.2f} GB")
+    
+  # 2. Verificar modelo
+    model_device = next(model.parameters()).device
+    print(f"\n✓ Modelo en dispositivo: {model_device}")
+    print(f"  - Esperado: {config.DEVICE}")
+    
+    # Comparar el tipo de dispositivo (cuda vs cpu)
+    if model_device.type != config.DEVICE.type:
+        raise AssertionError(f"❌ Modelo en {model_device}, esperado {config.DEVICE}")
+    
+    
+    # 3. Verificar pesos
+    print(f"\n✓ Pesos en dispositivo: {weights.device}")
+    print(f"  - Shape: {weights.shape}")
+    print(f"  - Valores: {weights.cpu().numpy()}")
+    
+    if weights.device.type != config.DEVICE.type:
+        raise AssertionError(f"❌ Pesos en {weights.device}, esperado {config.DEVICE}")
+    
+    # 4. Verificar datasets (están en CPU, se mueven a GPU automáticamente)
+    print(f"\n✓ Datasets:")
+    print(f"  - Train: {len(train_dataset)} samples")
+    print(f"  - Validation: {len(validation_dataset)} samples")
+    
+    # Verificar estructura del dataset
+    sample_train = train_dataset[0]
+    print(f"\n✓ Estructura del dataset de entrenamiento:")
+    print(f"  - Keys: {list(sample_train.keys())}")
+    
+    for key, value in sample_train.items():
+        if hasattr(value, '__len__') and not isinstance(value, str):
+            print(f"  - {key}: tipo={type(value).__name__}, len={len(value)}")
+        else:
+            print(f"  - {key}: tipo={type(value).__name__}")
+    
+    # 5. Probar conversión a tensor y mover a GPU
+    print(f"\n✓ Test de conversión dataset → GPU:")
+    try:
+        # Simular lo que hace el DataLoader
+        test_input_ids = torch.tensor(sample_train['input_ids']).unsqueeze(0).to(config.DEVICE)
+        test_attention = torch.tensor(sample_train['attention_mask']).unsqueeze(0).to(config.DEVICE)
+        test_labels = torch.tensor(sample_train['labels']).to(config.DEVICE)
+        
+        print(f"  - input_ids: shape={test_input_ids.shape}, device={test_input_ids.device}")
+        print(f"  - attention_mask: shape={test_attention.shape}, device={test_attention.device}")
+        print(f"  - labels: shape={test_labels.shape}, device={test_labels.device}")
+        
+        # Test forward pass
+        model.eval()
+        with torch.no_grad():
+            test_output = model(input_ids=test_input_ids, attention_mask=test_attention)
+        print(f"  - output logits: shape={test_output.logits.shape}, device={test_output.logits.device}")
+        print(f"  ✓ Forward pass exitoso en {config.DEVICE}")
+        
+        # Limpiar memoria
+        del test_input_ids, test_attention, test_labels, test_output
+        if gpu_available:
+            torch.cuda.empty_cache()
+            
+    except Exception as e:
+        print(f"  ❌ Error en test de GPU: {e}")
+        raise
+    
+    # 6. Parámetros del modelo
+    total = sum(p.numel() for p in model.parameters())
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"\n✓ Parámetros del modelo:")
+    print(f"  - Total: {total:,}")
+    print(f"  - Entrenables: {trainable:,} ({100*trainable/total:.1f}%)")
+    
+    if gpu_available:
+        print(f"\n✓ Memoria GPU después de verificaciones:")
+        print(f"  - Asignada: {torch.cuda.memory_allocated(0) / 1e9:.2f} GB")
+        print(f"  - Reservada: {torch.cuda.memory_reserved(0) / 1e9:.2f} GB")
+    
+    print("=" * 60)
+    print("✓ TODAS LAS VERIFICACIONES PASARON CORRECTAMENTE")
+    print("=" * 60 + "\n")
+
+
+
+
 def full_training(train_dataset, validation_dataset, weights):
     """
     Entrena el modelo en dos fases con pesos de clase.
@@ -59,8 +157,10 @@ def full_training(train_dataset, validation_dataset, weights):
     Returns:
         Trainer: El trainer de la fase 2 (con el modelo entrenado)
     """
-    
-    # Cargar modelo
+    # ============================================================
+    # CARGAR Y PREPARAR MODELO
+    # ============================================================
+    print("Cargando modelo...")
     model = DistilBertForSequenceClassification.from_pretrained(
         config.MODEL_NAME, 
         num_labels=config.NUM_LABELS,
@@ -69,9 +169,23 @@ def full_training(train_dataset, validation_dataset, weights):
     )
     model.to(config.DEVICE)
     
+    # Asegurar que los pesos estén en el dispositivo correcto
+    if weights.device != config.DEVICE:
+        print(f"Moviendo pesos de {weights.device} a {config.DEVICE}...")
+        weights = weights.to(config.DEVICE)
+    
+    # ============================================================
+    # VERIFICACIÓN COMPLETA
+    # ============================================================
+    verify_gpu_setup(model, weights, train_dataset, validation_dataset)
+
+    # ============================================================
+    # FASE 1: Fine-tuning completo
+    # ============================================================
+    
     # FASE 1: Fine-tuning completo
     print("=" * 60)
-    print("FASE 1: Fine-tuning completo del modelo con pesos de clase")
+    print("FASE 1: Fine-tuning completo del modelo base")
     print("=" * 60)
     
     training_args_phase1 = TrainingArguments(

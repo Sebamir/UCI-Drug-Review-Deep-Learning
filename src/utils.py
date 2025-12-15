@@ -45,9 +45,9 @@ def predict_sentiment_threshold(text, model, tokenizer, threshold=config.OPTIMAL
         truncation=True,
         return_tensors='pt'
     )
-    
-    inputs = {key: value.to(config.device) for key, value in inputs.items()}
-    
+
+    inputs = {key: value.to(config.DEVICE) for key, value in inputs.items()}
+
     # Modo evaluación
     model.eval()
     
@@ -69,20 +69,25 @@ def predict_sentiment_threshold(text, model, tokenizer, threshold=config.OPTIMAL
 def ProcessingDataframe(df):
     tokenizer = AutoTokenizer.from_pretrained(config.MODEL_NAME)
     
+    df_clasificado = df.query("rating >= 7 | rating <= 4").copy() # Filtramos solo las filas con rating >= 7 o <= 4
+    df_clasificado["flag"] = df_clasificado["rating"].apply(lambda x: 1 if x >= 7 else 0) # Clasificamos los ratings en 1 (positivo) y 0 (negativo)
+
+    df_clasificado = df_clasificado[["review", "flag"]]
+
     # Separar clases
-    clase_0 = df[df["flag"] == 0]
-    clase_1 = df[df["flag"] == 1]
+    clase_0 = df_clasificado[df_clasificado["flag"] == 0]
+    clase_1 = df_clasificado[df_clasificado["flag"] == 1]
     
     # Submuestreo
-    clase_0_subsampled = clase_0.sample(frac=0.5, random_state=config.seed)
-    clase_1_subsampled = clase_1.sample(frac=0.5, random_state=config.seed)
-    
+    clase_0_subsampled = clase_0.sample(frac=0.5, random_state=config.SEED)
+    clase_1_subsampled = clase_1.sample(frac=0.5, random_state=config.SEED)
+
     # Duplicar clase minoritaria para balancear
     clase_0_duplicated = pd.concat([clase_0_subsampled, clase_0_subsampled])
     
     # Dataset balanceado final
     df_balanced = pd.concat([clase_0_duplicated, clase_1_subsampled]).sample(
-        frac=1, random_state=config.seed
+        frac=1, random_state=config.SEED    
     ).reset_index(drop=True)
     
     # Calcular pesos sobre los datos FINALES balanceados
@@ -92,7 +97,7 @@ def ProcessingDataframe(df):
         classes=np.unique(labels_for_weights),
         y=labels_for_weights
     )
-    weights = torch.tensor(clase_weights, dtype=torch.float32).to(config.device)
+    weights = torch.tensor(clase_weights, dtype=torch.float32).to(config.DEVICE)
     
     # Tokenización
     encoding = tokenizer.batch_encode_plus(
@@ -111,8 +116,8 @@ def ProcessingDataframe(df):
     # División train/validation 
     train_inputs, val_inputs, train_masks, val_masks, train_labels, val_labels = train_test_split(
         input_ids, attention_mask, labels,
-        test_size=config.test_size,
-        random_state=config.seed,
+        test_size=config.TEST_SIZE,
+        random_state=config.SEED,
         stratify=labels
     )
     
