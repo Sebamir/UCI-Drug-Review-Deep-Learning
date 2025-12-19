@@ -1,17 +1,15 @@
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from src.config import Config 
+from config import Config 
 from datasets import Dataset
 from sklearn.utils.class_weight import compute_class_weight
 import torch
 from transformers import AutoTokenizer
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-<<<<<<< HEAD
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 import matplotlib.pyplot as plt
-=======
->>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
+from torch.utils.data import DataLoader
 
 config = Config()
 
@@ -139,47 +137,113 @@ def ProcessingDataframe(df):
         'labels': val_labels
     })
     
-<<<<<<< HEAD
     return train_dataset, validation_dataset, weights
 
 
 
 def run_detailed_evaluation(model, val_dataset):
+    """
+    Ejecuta una evaluación detallada del modelo con métricas y visualizaciones.
+    
+    Args:
+        model: Modelo de PyTorch a evaluar
+        val_dataset: Dataset de validación con input_ids, attention_mask y labels
+        config: Objeto de configuración con DEVICE, PER_DEVICE_TEST_BATCH_SIZE, etc.
+    
+    Returns:
+        dict: Diccionario con métricas de evaluación
+    """
     print("\n--- 🔍 Iniciando Evaluación Detallada ---")
     
-    # Configurar el entorno para evaluación
+    # Validaciones iniciales
+    if len(val_dataset) == 0:
+        raise ValueError("El dataset de validación está vacío")
+    
+    # Asegurar que el modelo esté en el dispositivo correcto y en modo evaluación
+    model.to(config.DEVICE)
     model.eval()
-
+    
+    # Configurar DataLoader con optimizaciones
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=config.PER_DEVICE_TEST_BATCH_SIZE,
+        pin_memory=True,
+        num_workers=0  # Evita problemas de serialización con datasets de HF
+    )
+    
+    # Listas para acumular tensores (más eficiente que numpy en cada iteración)
     all_preds = []
     all_labels = []
-
-    # Extraer etiquetas y predicciones del dataset de validación
-    print("Procesando predicciones...")
-    for batch in val_dataset:
-        # Preparar datos (esto asume que tu dataset devuelve tensores)
-        input_ids = torch.tensor(batch['input_ids']).unsqueeze(0).to(config.DEVICE)
-        attention_mask = torch.tensor(batch['attention_mask']).unsqueeze(0).to(config.DEVICE)
-        label = batch['labels']
-
+    
+    print(f"Procesando {len(val_dataset)} muestras en {len(val_loader)} batches...")
+    
+    try:
         with torch.no_grad():
-            outputs = model(input_ids, attention_mask=attention_mask)
-            prediction = torch.argmax(outputs.logits, dim=-1).item()
-            
-        all_preds.append(prediction)
-        all_labels.append(label)
-
-    # 1. Reporte de Clasificación (Precisión, Recall, F1)
-    target_names = ['Negativo', 'Neutral', 'Positivo']
+            for batch_idx, batch in enumerate(val_loader):
+                # Mover batch a GPU
+                input_ids = batch['input_ids'].to(config.DEVICE)
+                attention_mask = batch['attention_mask'].to(config.DEVICE)
+                labels = batch['labels'].to(config.DEVICE)
+                
+                # Forward pass
+                outputs = model(input_ids, attention_mask=attention_mask)
+                
+                # Obtener predicciones (clase con mayor probabilidad)
+                preds = torch.argmax(outputs.logits, dim=1)
+                
+                # Acumular predicciones y labels (mantener en CPU)
+                all_preds.append(preds.cpu())
+                all_labels.append(labels.cpu())
+                
+                # Progreso cada 10 batches
+                if (batch_idx + 1) % 10 == 0:
+                    print(f"  Procesados {batch_idx + 1}/{len(val_loader)} batches")
+        
+        # Convertir a numpy una sola vez (más eficiente)
+        all_preds = torch.cat(all_preds).numpy()
+        all_labels = torch.cat(all_labels).numpy()
+        
+    except Exception as e:
+        print(f"❌ Error durante la evaluación: {str(e)}")
+        raise
+    
+    # Nombres de las clases 
+    target_names = ['Negativo', 'Positivo']
+    
+    # 1. Reporte de Clasificación
     print("\n📊 Reporte de Clasificación:")
+    report = classification_report(
+        all_labels, 
+        all_preds, 
+        target_names=target_names,
+        output_dict=True
+    )
     print(classification_report(all_labels, all_preds, target_names=target_names))
-
+    
     # 2. Matriz de Confusión Visual
+    print("\n📈 Generando matriz de confusión...")
     cm = confusion_matrix(all_labels, all_preds)
-    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    fig, ax = plt.subplots(figsize=(10, 8))
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=target_names)
-    disp.plot(cmap=plt.cm.Blues, ax=ax)
-    plt.title("Matriz de Confusión: Sentimientos de Medicamentos")
+    disp.plot(cmap=plt.cm.Blues, ax=ax, values_format='d')
+    
+    plt.title("Matriz de Confusión: Sentimientos de Medicamentos", fontsize=14, pad=20)
+    plt.xlabel("Predicción", fontsize=12)
+    plt.ylabel("Etiqueta Real", fontsize=12)
+    plt.tight_layout()
     plt.show()
-=======
-    return train_dataset, validation_dataset, weights
->>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
+    plt.close()  # Liberar memoria
+    
+    # 3. Métricas adicionales
+    accuracy = (all_preds == all_labels).sum() / len(all_labels)
+    print(f"\n✅ Accuracy global: {accuracy:.4f} ({accuracy*100:.2f}%)")
+    
+    # Retornar métricas para logging o análisis posterior
+    return {
+        'accuracy': accuracy,
+        'classification_report': report,
+        'confusion_matrix': cm.tolist(),
+        'predictions': all_preds.tolist(),
+        'true_labels': all_labels.tolist()
+    }

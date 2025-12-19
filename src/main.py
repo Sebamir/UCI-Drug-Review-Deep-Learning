@@ -1,30 +1,22 @@
 import argparse
-<<<<<<< HEAD
 import os
-=======
->>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
 import pandas as pd
 from transformers import DistilBertForSequenceClassification, AutoTokenizer
 
 # Importar tus módulos locales
-from src.config import Config  # Asume que tienes una clase Config en src/config.py
-from src.Trainer import full_training # Tu clase Trainer
-<<<<<<< HEAD
-from src.utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation
-=======
-from src.utils import ProcessingDataframe, predict_sentiment_threshold
->>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
+from config import Config  # Asume que tienes una clase Config en src/config.py
+from Trainer import full_training # Tu clase Trainer
+from utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation
 
 def main():
     parser = argparse.ArgumentParser(description="Entrenamiento y Predicción de Sentimientos con DistilBERT")
-    parser.add_argument('--mode', type=str, choices=['train', 'predict'], required=True, help="Modo de operación: 'train' para entrenar, 'predict' para predecir")
+    parser.add_argument('--mode', type=str, choices=['train', 'evaluate', 'predict'], required=True, help="Modo de operación: 'train' para entrenar, 'predict' para predecir")
     parser.add_argument('--text', type=str, help="Texto para predecir el sentimiento (solo en modo 'predict')")
     args = parser.parse_args()
 
     config = Config()  # Instancia tu configuración
 
     if args.mode == 'train':
-<<<<<<< HEAD
 
         dirs_to_create = [
         config.OUTPUT_DIR_1, 
@@ -37,9 +29,6 @@ def main():
             if not os.path.exists(d):
                 print(f"📁 Creando directorio: {d}")
                 os.makedirs(d, exist_ok=True)
-    # ----------------------------
-=======
->>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
         print("Iniciando el entrenamiento del modelo...")
         df = pd.read_csv(config.DATA_PATH)
 
@@ -59,7 +48,6 @@ def main():
         print(f"Métricas de validación: {results}")
         print("Proceso de entrenamiento finalizado.")
         print("Modelo guardado en la ruta especificada.")
-<<<<<<< HEAD
         model.save_model(config.SAVE_MODEL_PATH)
 
     elif args.mode == "evaluate":
@@ -75,12 +63,10 @@ def main():
         model.to(config.DEVICE)
 
         print("Ejecutando evaluación detallada...")
-        run_detailed_evaluation(model, test_dataset)
-
+        test_dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
+        metrics = run_detailed_evaluation(model, test_dataset)
+ 
         print("Evaluación completada.")
-=======
-        model.save_pretrained(config.SAVE_MODEL_PATH)
->>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
 
     elif args.mode == 'predict':
         if not args.text:

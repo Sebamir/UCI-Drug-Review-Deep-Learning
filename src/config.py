@@ -12,7 +12,6 @@ class Config:
         
         # Rutas del modelo
         self.MODEL_NAME = 'distilbert-base-cased' # Modelo base de Hugging Face
-<<<<<<< HEAD
         
         self.SAVE_MODEL_PATH = "Modelo_entrenado/modelo_final_consolidado"
         self.CHECKPOINT_PATH = "results/stage_2_frozen/checkpoint-9351" 
@@ -20,16 +19,6 @@ class Config:
         # Rutas de Datos
         self.DATA_PATH = "Dataset/raw/temporal/drugsComTrain_raw.csv" 
         self.TEST_PATH = "Dataset/raw/temporal/drugsComTest_raw.csv"
-=======
-        # Aunque son iguales, es buena práctica separarlas si planeas hacer ajustes después del entrenamiento
-        self.SAVE_MODEL_PATH = "Modelo_entrenado/drug_review_classifier_distilbert_fullbalance" 
-        self.CHECKPOINT_PATH = "Modelo_entrenado/drug_review_classifier_distilbert_fullbalance" # Usar para cargar el modelo en modo predict
-
-        # Rutas de Datos
-        self.DATA_PATH = "Dataset/raw/temporal/drugsComTrain_raw.csv" 
-        self.TRAIN_PATH = "Dataset/processed/train_dataset.csv" 
-        self.TEST_PATH = "Dataset/processed/test_dataset.csv" 
->>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
         
         # Directorios de Salida (para el Trainer de Hugging Face)
         self.OUTPUT_DIR_1 = os.path.join("results", "stage_1_unfrozen")
@@ -62,6 +51,7 @@ class Config:
         # Corrección: Estas no deben ser tuplas al final
         self.PER_DEVICE_TRAIN_BATCH_SIZE = 8  # Tamaño del batch por dispositivo (GPU/CPU)
         self.PER_DEVICE_EVAL_BATCH_SIZE = 32  # Tamaño del batch para evaluación
+        self.PER_DEVICE_TEST_BATCH_SIZE = 16  # Tamaño del batch para test
 
         # Determinar el dispositivo (Se define en main.py, pero es útil tener una referencia aquí)
         # NOTA: Esta variable se sobrescribe en main.py para asegurar que el tensor weights y el modelo estén alineados.

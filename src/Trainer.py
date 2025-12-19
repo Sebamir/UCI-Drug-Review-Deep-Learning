@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 from transformers import DistilBertForSequenceClassification, TrainingArguments, Trainer
-from src.utils import compute_metrics
-from src.config import Config 
+from utils import compute_metrics
+from config import Config 
 
 config = Config()
 
@@ -215,11 +215,7 @@ def full_training(train_dataset, validation_dataset, weights):
         
     )
     
-<<<<<<< HEAD
     trainer_phase1.train(resume_from_checkpoint=True)
-=======
-    trainer_phase1.train()
->>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
     
     # FASE 2: Solo capa clasificadora
     print("\n" + "=" * 60)
