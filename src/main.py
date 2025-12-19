@@ -1,11 +1,19 @@
 import argparse
+<<<<<<< HEAD
+import os
+=======
+>>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
 import pandas as pd
 from transformers import DistilBertForSequenceClassification, AutoTokenizer
 
 # Importar tus módulos locales
 from src.config import Config  # Asume que tienes una clase Config en src/config.py
 from src.Trainer import full_training # Tu clase Trainer
+<<<<<<< HEAD
+from src.utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation
+=======
 from src.utils import ProcessingDataframe, predict_sentiment_threshold
+>>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
 
 def main():
     parser = argparse.ArgumentParser(description="Entrenamiento y Predicción de Sentimientos con DistilBERT")
@@ -16,6 +24,22 @@ def main():
     config = Config()  # Instancia tu configuración
 
     if args.mode == 'train':
+<<<<<<< HEAD
+
+        dirs_to_create = [
+        config.OUTPUT_DIR_1, 
+        config.OUTPUT_DIR_2, 
+        config.LOGGING_DIR_1, 
+        config.LOGGING_DIR_2
+    ]
+    
+        for d in dirs_to_create:
+            if not os.path.exists(d):
+                print(f"📁 Creando directorio: {d}")
+                os.makedirs(d, exist_ok=True)
+    # ----------------------------
+=======
+>>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
         print("Iniciando el entrenamiento del modelo...")
         df = pd.read_csv(config.DATA_PATH)
 
@@ -35,7 +59,28 @@ def main():
         print(f"Métricas de validación: {results}")
         print("Proceso de entrenamiento finalizado.")
         print("Modelo guardado en la ruta especificada.")
+<<<<<<< HEAD
+        model.save_model(config.SAVE_MODEL_PATH)
+
+    elif args.mode == "evaluate":
+        print("Iniciando evaluación del modelo entrenado...")
+        print("Cargando datos...")
+        df = pd.read_csv(config.TEST_PATH)
+
+        print(f"Dataset de prueba cargado con {len(df)} registros. Procesando...")
+        _, test_dataset, _ = ProcessingDataframe(df)
+
+        print("Cargando el modelo entrenado...")
+        model = DistilBertForSequenceClassification.from_pretrained(config.SAVE_MODEL_PATH)
+        model.to(config.DEVICE)
+
+        print("Ejecutando evaluación detallada...")
+        run_detailed_evaluation(model, test_dataset)
+
+        print("Evaluación completada.")
+=======
         model.save_pretrained(config.SAVE_MODEL_PATH)
+>>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
 
     elif args.mode == 'predict':
         if not args.text:

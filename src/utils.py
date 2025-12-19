@@ -7,6 +7,11 @@ from sklearn.utils.class_weight import compute_class_weight
 import torch
 from transformers import AutoTokenizer
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+<<<<<<< HEAD
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+import matplotlib.pyplot as plt
+=======
+>>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
 
 config = Config()
 
@@ -134,4 +139,47 @@ def ProcessingDataframe(df):
         'labels': val_labels
     })
     
+<<<<<<< HEAD
     return train_dataset, validation_dataset, weights
+
+
+
+def run_detailed_evaluation(model, val_dataset):
+    print("\n--- 🔍 Iniciando Evaluación Detallada ---")
+    
+    # Configurar el entorno para evaluación
+    model.eval()
+
+    all_preds = []
+    all_labels = []
+
+    # Extraer etiquetas y predicciones del dataset de validación
+    print("Procesando predicciones...")
+    for batch in val_dataset:
+        # Preparar datos (esto asume que tu dataset devuelve tensores)
+        input_ids = torch.tensor(batch['input_ids']).unsqueeze(0).to(config.DEVICE)
+        attention_mask = torch.tensor(batch['attention_mask']).unsqueeze(0).to(config.DEVICE)
+        label = batch['labels']
+
+        with torch.no_grad():
+            outputs = model(input_ids, attention_mask=attention_mask)
+            prediction = torch.argmax(outputs.logits, dim=-1).item()
+            
+        all_preds.append(prediction)
+        all_labels.append(label)
+
+    # 1. Reporte de Clasificación (Precisión, Recall, F1)
+    target_names = ['Negativo', 'Neutral', 'Positivo']
+    print("\n📊 Reporte de Clasificación:")
+    print(classification_report(all_labels, all_preds, target_names=target_names))
+
+    # 2. Matriz de Confusión Visual
+    cm = confusion_matrix(all_labels, all_preds)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=target_names)
+    disp.plot(cmap=plt.cm.Blues, ax=ax)
+    plt.title("Matriz de Confusión: Sentimientos de Medicamentos")
+    plt.show()
+=======
+    return train_dataset, validation_dataset, weights
+>>>>>>> db0257491d425664f186c5f8882d56036e37c9e9

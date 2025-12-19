@@ -1,3 +1,12 @@
 # Entorno virtual
 venv/
+<<<<<<< HEAD
 .env
+__pycache__/
+*.pyc
+.vscode/
+*.pth
+*.h5
+=======
+.env
+>>>>>>> db0257491d425664f186c5f8882d56036e37c9e9
