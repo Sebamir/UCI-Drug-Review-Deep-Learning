@@ -25,6 +25,9 @@ class Config:
         self.LOGGING_DIR_1 = os.path.join("logs", "stage_1")
         self.OUTPUT_DIR_2 = os.path.join("results", "stage_2_frozen")
         self.LOGGING_DIR_2 = os.path.join("logs", "stage_2")
+
+        # Ruta reporte final 
+        self.REPORT = os.path.join("results", "Evaluation", "evaluacion-modelo-final.pdf")
         
         # --- 2. Hiperparámetros del Modelo ---
         
@@ -46,7 +49,7 @@ class Config:
         self.SEED = 42           # Semilla para reproducibilidad
         self.TEST_SIZE = 0.2     # Tamaño del conjunto de prueba
         self.WARMUP_STEPS = 500  # Pasos de calentamiento
-        self.OPTIMAL_THRESHOLD = 0.75 # Umbral (lo estás usando, lo dejamos aquí)
+        self.OPTIMAL_THRESHOLD = 0.75 # Umbral 
         
         # Corrección: Estas no deben ser tuplas al final
         self.PER_DEVICE_TRAIN_BATCH_SIZE = 8  # Tamaño del batch por dispositivo (GPU/CPU)
