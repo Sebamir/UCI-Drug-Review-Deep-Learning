@@ -4,9 +4,9 @@ import pandas as pd
 from transformers import DistilBertForSequenceClassification, AutoTokenizer
 
 # Importar tus módulos locales
-from config import Config  # Asume que tienes una clase Config en src/config.py
-from Trainer import full_training # Tu clase Trainer
-from utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation
+from src.config import Config  
+from src.Trainer import full_training 
+from src.utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation
 
 def main():
     parser = argparse.ArgumentParser(description="Entrenamiento y Predicción de Sentimientos con DistilBERT")
@@ -72,13 +72,9 @@ def main():
         if not args.text:
             raise ValueError("Se requiere un texto para predecir en modo 'predict'.")
         print(f"Realizando predicción para el texto: {args.text}")
-        # Aquí iría la lógica para cargar el modelo entrenado y hacer la predicción
-        # Por ejemplo:
-        # model = load_trained_model(config)
-        # sentiment = preprocess_and_predict(args.text, model)
-        # print(f"Sentimiento predicho: {sentiment}")
-
+    
         model = DistilBertForSequenceClassification.from_pretrained(config.SAVE_MODEL_PATH)
+        model.to(config.DEVICE)
         tokenizer = AutoTokenizer.from_pretrained(config.MODEL_NAME) 
         sentiment, pos_prob, neg_prob = predict_sentiment_threshold(args.text, model, tokenizer)
         print(f"Sentimiento predicho: {sentiment} (Positivo: {pos_prob:.4f}, Negativo: {neg_prob:.4f})")

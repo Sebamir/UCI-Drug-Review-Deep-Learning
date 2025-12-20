@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
 from transformers import DistilBertForSequenceClassification, TrainingArguments, Trainer
-from utils import compute_metrics
-from config import Config 
+from src.utils import compute_metrics
+from src.config import Config 
 
 config = Config()
 
@@ -202,7 +202,7 @@ def full_training(train_dataset, validation_dataset, weights):
         save_strategy="epoch",
         load_best_model_at_end=True,
         learning_rate=config.LEARNING_RATE_1,
-        dataloader_num_workers=4,
+        dataloader_num_workers=0,
         metric_for_best_model="eval_loss",  # O "eval_loss" según prefieras
     )
     
@@ -246,7 +246,7 @@ def full_training(train_dataset, validation_dataset, weights):
         save_strategy="epoch",
         load_best_model_at_end=True,
         learning_rate=config.LEARNING_RATE_2,
-        dataloader_num_workers=4,
+        dataloader_num_workers=0,
         metric_for_best_model="eval_loss",
     )
     

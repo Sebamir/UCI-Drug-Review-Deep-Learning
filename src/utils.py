@@ -1,15 +1,27 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from config import Config 
-from datasets import Dataset
-from sklearn.utils.class_weight import compute_class_weight
 import torch
-from transformers import AutoTokenizer
-from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
-import matplotlib.pyplot as plt
+from datasets import Dataset
 from torch.utils.data import DataLoader
+
+# 2. Transformers (Hugging Face)
+from transformers import AutoTokenizer
+
+# 3. Scikit-learn (Métricas y Utilidades)
+from sklearn.metrics import (
+    accuracy_score, 
+    classification_report, 
+    confusion_matrix, 
+    ConfusionMatrixDisplay, 
+    f1_score, 
+    precision_score, 
+    recall_score
+)
+from sklearn.model_selection import train_test_split
+from sklearn.utils.class_weight import compute_class_weight
+from src.config import Config
+
 
 config = Config()
 
