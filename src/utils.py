@@ -30,6 +30,31 @@ from src.config import Config
 
 config = Config()
 
+def ProcessingTest(df):
+    tokenizer = AutoTokenizer.from_pretrained(config.MODEL_NAME)
+    df_proccesado1 = df.query("rating >= 7 | rating <= 4").copy() # Filtramos solo las filas con rating >= 7 o <= 4
+    df_proccesado1["flag"] = df_proccesado1["rating"].apply(lambda x: 1 if x >= 7 else 0) # Clasificamos los ratings en 1 (positivo) y 0 (negativo)
+    df_proccesado1 = df_proccesado1[["review", "flag"]]
+    # Tokenización
+    encoding = tokenizer.batch_encode_plus(
+        df_proccesado1["review"].tolist(),
+        max_length=config.MAX_LEN,
+        padding='max_length',
+        truncation=True
+    )
+
+    input_ids = encoding['input_ids']
+    attention_mask = encoding['attention_mask']
+    labels = torch.tensor(df_proccesado1['flag'].values)    
+
+    Test_dataset = Dataset.from_dict({
+        'input_ids': input_ids, 
+        'attention_mask': attention_mask,
+        'labels': labels
+    }) 
+
+    return Test_dataset
+
 def compute_metrics(eval_pred):
     """
     Calcula las métricas de precisión (accuracy) y F1-score.
@@ -155,8 +180,6 @@ def ProcessingDataframe(df):
     })
     
     return train_dataset, validation_dataset, weights
-
-
 
 def run_detailed_evaluation(model, val_dataset, output_pdf='evaluation_report.pdf'):
     """
@@ -399,6 +422,7 @@ def find_latest_checkpoint(stage_dir):
 
 
 def plot_loss_and_lr(*stage_configs):
+
     """
     Grafica las curvas de Loss y Learning Rate para múltiples stages.
     Automáticamente encuentra el último checkpoint de cada stage.

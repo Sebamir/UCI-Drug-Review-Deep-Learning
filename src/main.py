@@ -6,11 +6,11 @@ from transformers import DistilBertForSequenceClassification, AutoTokenizer
 # Importar tus módulos locales
 from src.config import Config  
 from src.Trainer import full_training 
-from src.utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation, plot_loss_and_lr
+from src.utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation, plot_loss_and_lr, ProcessingTest 
 
 def main():
     parser = argparse.ArgumentParser(description="Entrenamiento y Predicción de Sentimientos con DistilBERT")
-    parser.add_argument('--mode', type=str, choices=['train', 'evaluate', 'predict'], required=True, help="Modo de operación: 'train' para entrenar, 'predict' para predecir")
+    parser.add_argument('--mode', type=str, choices=['train', 'testing', 'predict'], required=True, help="Modo de operación: 'train' para entrenar, 'predict' para predecir")
     parser.add_argument('--text', type=str, help="Texto para predecir el sentimiento (solo en modo 'predict')")
     args = parser.parse_args()
 
@@ -57,13 +57,13 @@ def main():
         print("Modelo guardado en la ruta especificada.")
         model.save_model(config.SAVE_MODEL_PATH)
 
-    elif args.mode == "evaluate":
+    elif args.mode == "testing":
         print("Iniciando evaluación del modelo entrenado...")
         print("Cargando datos...")
         df = pd.read_csv(config.TEST_PATH)
 
         print(f"Dataset de prueba cargado con {len(df)} registros. Procesando...")
-        _, test_dataset, _ = ProcessingDataframe(df)
+        test_dataset = ProcessingTest(df)
 
         print("Cargando el modelo entrenado...")
         model = DistilBertForSequenceClassification.from_pretrained(config.SAVE_MODEL_PATH)
