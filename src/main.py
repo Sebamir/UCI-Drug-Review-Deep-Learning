@@ -7,10 +7,11 @@ from transformers import DistilBertForSequenceClassification, AutoTokenizer
 from src.config import Config  
 from src.Trainer import full_training 
 from src.utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation, plot_loss_and_lr, ProcessingTest 
+from src.ui import demo
 
 def main():
     parser = argparse.ArgumentParser(description="Entrenamiento y Predicción de Sentimientos con DistilBERT")
-    parser.add_argument('--mode', type=str, choices=['train', 'testing', 'predict'], required=True, help="Modo de operación: 'train' para entrenar, 'predict' para predecir")
+    parser.add_argument('--mode', type=str, choices=['train', 'testing', 'predict', 'ui'], required=True, help="Modo de operación: 'train' para entrenar, 'predict' para predecir")
     parser.add_argument('--text', type=str, help="Texto para predecir el sentimiento (solo en modo 'predict')")
     args = parser.parse_args()
 
@@ -90,6 +91,10 @@ def main():
         sentiment, pos_prob, neg_prob = predict_sentiment_threshold(args.text, model, tokenizer)
         print(f"Sentimiento predicho: {sentiment} (Positivo: {pos_prob:.4f}, Negativo: {neg_prob:.4f})")
         print("Predicción completada.")
+
+    elif args.mode == "ui":
+        print("Lanzando interfaz web...")
+        demo.launch(share=False) # share=True si quieres un link público temporal
 
 if __name__ == "__main__":
     main()
