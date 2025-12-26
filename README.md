@@ -43,15 +43,16 @@ En este proyecto, la **Accuracy** fue descartada como métrica principal debido 
 ---
 
 ## Modos de uso
-**Entrenamiento del modelo:**: python -m src.main --mode train.
-**Evaluación tecnica (Testing):** python -m src.main --mode testing.
-**A través de la interface para prediciones directas (Ejecutar Interfaz Web por Gradio):** python -m src.main --mode ui.
+* **Entrenamiento del modelo:**: python -m src.main --mode train.
+* **Evaluación tecnica (Testing):** python -m src.main --mode testing.
+* **A través de la interface para prediciones directas (Ejecutar Interfaz Web por Gradio):** python -m src.main --mode ui.
 
 ---
 
 ## 📁 Estructura del Proyecto
 
 A continuación se detalla la organización del repositorio, siguiendo una arquitectura modular para facilitar el mantenimiento y la escalabilidad del modelo:
+```text
 ├── Dataset/
 │   ├── raw/
 │   │   ├── mimic-iii-clinical-database-demo-1.4/ # Próxima fase: Datos clínicos para integración
@@ -78,7 +79,7 @@ A continuación se detalla la organización del repositorio, siguiendo una arqui
 ├── Drug Reviews.ipynb                            # Notebook de experimentación y análisis exploratorio
 ├── requirements.txt                              # Dependencias del proyecto (Transformers, Torch, Gradio)
 └── .gitignore                                    # Archivos excluidos de control de versiones
-
+```
 ---
 
 ## 🚀 Hoja de Ruta y Planes a Futuro (Roadmap)
