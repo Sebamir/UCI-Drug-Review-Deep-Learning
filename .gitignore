@@ -1,6 +1,7 @@
 # Entorno virtual
 venv/
 .env
+.venv
 __pycache__/
 *.pyc
 .vscode/

@@ -49,7 +49,7 @@ class Config:
         self.SEED = 42           # Semilla para reproducibilidad
         self.TEST_SIZE = 0.2     # Tamaño del conjunto de prueba
         self.WARMUP_STEPS = 500  # Pasos de calentamiento
-        self.OPTIMAL_THRESHOLD = 0.75 # Umbral 
+        self.OPTIMAL_THRESHOLD = 0.90 # Umbral 
         
         # Corrección: Estas no deben ser tuplas al final
         self.PER_DEVICE_TRAIN_BATCH_SIZE = 8  # Tamaño del batch por dispositivo (GPU/CPU)

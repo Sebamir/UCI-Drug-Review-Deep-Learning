@@ -55,6 +55,425 @@ def ProcessingTest(df):
 
     return Test_dataset
 
+def run_detailed_evaluation_max(model, val_dataset, output_pdf='evaluation_report.pdf'):
+    """
+    Ejecuta una evaluación detallada del modelo con métricas y visualizaciones.
+    Incluye optimización de threshold por F1-score y Umbral de Youden.
+    Genera un PDF con todos los resultados.
+    
+    Args:
+        model: Modelo de PyTorch a evaluar
+        val_dataset: Dataset de validación con input_ids, attention_mask y labels
+        output_pdf: Nombre del archivo PDF de salida
+    
+    Returns:
+        dict: Diccionario con métricas de evaluación y thresholds óptimos
+    """
+    print("\n--- 🔍 Iniciando Evaluación Detallada ---")
+    
+    # Validaciones iniciales
+    if len(val_dataset) == 0:
+        raise ValueError("El dataset de validación está vacío")
+    
+    # Asegurar que el modelo esté en el dispositivo correcto y en modo evaluación
+    model.to(config.DEVICE)
+    model.eval()
+    
+    # Configurar DataLoader con optimizaciones
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=config.PER_DEVICE_TEST_BATCH_SIZE,
+        pin_memory=True,
+        num_workers=0
+    )
+    
+    # Listas para acumular predicciones y probabilidades
+    all_preds = []
+    all_labels = []
+    all_probs = []  # ¡NUEVO! Para guardar probabilidades
+    
+    print(f"Procesando {len(val_dataset)} muestras en {len(val_loader)} batches...")
+    
+    try:
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(val_loader):
+                # Mover batch a GPU
+                input_ids = batch['input_ids'].to(config.DEVICE)
+                attention_mask = batch['attention_mask'].to(config.DEVICE)
+                labels = batch['labels'].to(config.DEVICE)
+                
+                # Forward pass
+                outputs = model(input_ids, attention_mask=attention_mask)
+                
+                # Obtener probabilidades con softmax
+                probs = torch.softmax(outputs.logits, dim=1)
+                
+                # Obtener predicciones (clase con mayor probabilidad)
+                preds = torch.argmax(outputs.logits, dim=1)
+                
+                # Acumular predicciones, labels y probabilidades
+                all_preds.append(preds.cpu())
+                all_labels.append(labels.cpu())
+                all_probs.append(probs[:, 1].cpu())  # Probabilidad de clase positiva
+                
+                # Progreso cada 10 batches
+                if (batch_idx + 1) % 10 == 0:
+                    print(f"  Procesados {batch_idx + 1}/{len(val_loader)} batches")
+        
+        # Convertir a numpy
+        all_preds = torch.cat(all_preds).numpy()
+        all_labels = torch.cat(all_labels).numpy()
+        all_probs = torch.cat(all_probs).numpy()
+        
+    except Exception as e:
+        print(f"❌ Error durante la evaluación: {str(e)}")
+        raise
+    
+    # ==================== OPTIMIZACIÓN DE THRESHOLDS ====================
+    print("\n🎯 Optimizando thresholds...")
+    
+    # Definir rango de thresholds a probar
+    thresholds = np.linspace(0.1, 0.9, 81)  # 81 puntos entre 0.1 y 0.9
+    
+    # Arrays para guardar métricas
+    f1_scores = []
+    youden_scores = []
+    precisions = []
+    recalls = []
+    specificities = []
+    
+    for threshold in thresholds:
+        # Aplicar threshold
+        preds_thresh = (all_probs >= threshold).astype(int)
+        
+        # Calcular métricas
+        tn, fp, fn, tp = confusion_matrix(all_labels, preds_thresh).ravel()
+        
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+        
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
+        youden = recall + specificity - 1  # Índice de Youden
+        
+        f1_scores.append(f1)
+        youden_scores.append(youden)
+        precisions.append(precision)
+        recalls.append(recall)
+        specificities.append(specificity)
+    
+    # Encontrar thresholds óptimos
+    best_f1_idx = np.argmax(f1_scores)
+    best_youden_idx = np.argmax(youden_scores)
+    
+    best_f1_threshold = thresholds[best_f1_idx]
+    best_youden_threshold = thresholds[best_youden_idx]
+    
+    print(f"✅ Mejor threshold por F1-Score: {best_f1_threshold:.3f} (F1={f1_scores[best_f1_idx]:.4f})")
+    print(f"✅ Mejor threshold por Youden: {best_youden_threshold:.3f} (Youden={youden_scores[best_youden_idx]:.4f})")
+    
+    # Recalcular métricas con thresholds óptimos
+    preds_f1 = (all_probs >= best_f1_threshold).astype(int)
+    preds_youden = (all_probs >= best_youden_threshold).astype(int)
+    
+    # Nombres de las clases 
+    target_names = ['Negativo', 'Positivo']
+    
+    # ==================== MÉTRICAS CON THRESHOLD DEFAULT ====================
+    print("\n📊 Reporte con Threshold por Defecto (0.5):")
+    preds_default = (all_probs >= 0.5).astype(int)
+    report_default = classification_report(all_labels, preds_default, target_names=target_names, output_dict=True)
+    print(classification_report(all_labels, preds_default, target_names=target_names))
+    cm_default = confusion_matrix(all_labels, preds_default)
+    
+    # ==================== MÉTRICAS CON THRESHOLD ÓPTIMO F1 ====================
+    print(f"\n📊 Reporte con Threshold Óptimo F1 ({best_f1_threshold:.3f}):")
+    report_f1 = classification_report(all_labels, preds_f1, target_names=target_names, output_dict=True)
+    print(classification_report(all_labels, preds_f1, target_names=target_names))
+    cm_f1 = confusion_matrix(all_labels, preds_f1)
+    
+    # ==================== MÉTRICAS CON THRESHOLD ÓPTIMO YOUDEN ====================
+    print(f"\n📊 Reporte con Threshold Óptimo Youden ({best_youden_threshold:.3f}):")
+    report_youden = classification_report(all_labels, preds_youden, target_names=target_names, output_dict=True)
+    print(classification_report(all_labels, preds_youden, target_names=target_names))
+    cm_youden = confusion_matrix(all_labels, preds_youden)
+    
+    # Accuracy
+    accuracy_default = (preds_default == all_labels).sum() / len(all_labels)
+    accuracy_f1 = (preds_f1 == all_labels).sum() / len(all_labels)
+    accuracy_youden = (preds_youden == all_labels).sum() / len(all_labels)
+    
+    # ==================== GENERAR PDF ====================
+    print(f"\n📄 Generando PDF: {output_pdf}")
+    
+    with PdfPages(output_pdf) as pdf:
+        # --- PÁGINA 1: Información General ---
+        fig = plt.figure(figsize=(11, 14))
+        fig.suptitle('Reporte de Evaluación del Modelo con Optimización de Threshold', 
+                     fontsize=18, fontweight='bold', y=0.98)
+        
+        info_text = f"""
+Fecha de evaluación: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Total de muestras: {len(val_dataset)}
+Batch size: {config.PER_DEVICE_TEST_BATCH_SIZE}
+Dispositivo: {config.DEVICE}
+
+═══════════════════════════════════════════════════════════════
+                    RESULTADOS DE OPTIMIZACIÓN
+═══════════════════════════════════════════════════════════════
+
+Threshold por Defecto:           0.500
+  → Accuracy: {accuracy_default:.4f} ({accuracy_default*100:.2f}%)
+  → F1-Score: {report_default['weighted avg']['f1-score']:.4f}
+
+Threshold Óptimo F1-Score:       {best_f1_threshold:.3f}
+  → Accuracy: {accuracy_f1:.4f} ({accuracy_f1*100:.2f}%)
+  → F1-Score: {report_f1['weighted avg']['f1-score']:.4f}
+  → Mejora F1: {(report_f1['weighted avg']['f1-score'] - report_default['weighted avg']['f1-score'])*100:+.2f}%
+
+Threshold Óptimo Youden:         {best_youden_threshold:.3f}
+  → Accuracy: {accuracy_youden:.4f} ({accuracy_youden*100:.2f}%)
+  → F1-Score: {report_youden['weighted avg']['f1-score']:.4f}
+  → Índice Youden: {youden_scores[best_youden_idx]:.4f}
+        """
+        
+        ax_info = fig.add_subplot(111)
+        ax_info.text(0.05, 0.5, info_text, fontsize=11, verticalalignment='center',
+                     fontfamily='monospace', bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.3))
+        ax_info.axis('off')
+        
+        plt.tight_layout(rect=[0, 0, 1, 0.97])
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close(fig)
+        
+        # --- PÁGINA 2: Curvas de Optimización ---
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        fig.suptitle('Análisis de Optimización de Threshold', fontsize=16, fontweight='bold')
+        
+        # Subplot 1: F1-Score vs Threshold
+        axes[0, 0].plot(thresholds, f1_scores, 'b-', linewidth=2, label='F1-Score')
+        axes[0, 0].axvline(best_f1_threshold, color='r', linestyle='--', linewidth=2, label=f'Óptimo: {best_f1_threshold:.3f}')
+        axes[0, 0].scatter([best_f1_threshold], [f1_scores[best_f1_idx]], color='r', s=100, zorder=5)
+        axes[0, 0].set_xlabel('Threshold', fontsize=11)
+        axes[0, 0].set_ylabel('F1-Score', fontsize=11)
+        axes[0, 0].set_title('F1-Score vs Threshold', fontweight='bold')
+        axes[0, 0].grid(True, alpha=0.3)
+        axes[0, 0].legend()
+        
+        # Subplot 2: Índice de Youden vs Threshold
+        axes[0, 1].plot(thresholds, youden_scores, 'g-', linewidth=2, label='Índice de Youden')
+        axes[0, 1].axvline(best_youden_threshold, color='r', linestyle='--', linewidth=2, label=f'Óptimo: {best_youden_threshold:.3f}')
+        axes[0, 1].scatter([best_youden_threshold], [youden_scores[best_youden_idx]], color='r', s=100, zorder=5)
+        axes[0, 1].set_xlabel('Threshold', fontsize=11)
+        axes[0, 1].set_ylabel('Índice de Youden', fontsize=11)
+        axes[0, 1].set_title('Índice de Youden vs Threshold', fontweight='bold')
+        axes[0, 1].grid(True, alpha=0.3)
+        axes[0, 1].legend()
+        
+        # Subplot 3: Precision, Recall, Specificity
+        axes[1, 0].plot(thresholds, precisions, 'b-', linewidth=2, label='Precision')
+        axes[1, 0].plot(thresholds, recalls, 'g-', linewidth=2, label='Recall')
+        axes[1, 0].plot(thresholds, specificities, 'orange', linewidth=2, label='Specificity')
+        axes[1, 0].axvline(best_f1_threshold, color='r', linestyle='--', alpha=0.5, label=f'F1 Óptimo')
+        axes[1, 0].axvline(best_youden_threshold, color='purple', linestyle='--', alpha=0.5, label=f'Youden Óptimo')
+        axes[1, 0].set_xlabel('Threshold', fontsize=11)
+        axes[1, 0].set_ylabel('Score', fontsize=11)
+        axes[1, 0].set_title('Métricas vs Threshold', fontweight='bold')
+        axes[1, 0].grid(True, alpha=0.3)
+        axes[1, 0].legend()
+        
+        # Subplot 4: Comparación de Métricas
+        metrics_comparison = {
+            'Default\n(0.5)': [accuracy_default, report_default['weighted avg']['f1-score'], 
+                               report_default['weighted avg']['precision'], report_default['weighted avg']['recall']],
+            f'F1 Óptimo\n({best_f1_threshold:.3f})': [accuracy_f1, report_f1['weighted avg']['f1-score'],
+                                                        report_f1['weighted avg']['precision'], report_f1['weighted avg']['recall']],
+            f'Youden\n({best_youden_threshold:.3f})': [accuracy_youden, report_youden['weighted avg']['f1-score'],
+                                                         report_youden['weighted avg']['precision'], report_youden['weighted avg']['recall']]
+        }
+        
+        x = np.arange(len(metrics_comparison))
+        width = 0.2
+        metrics_names = ['Accuracy', 'F1-Score', 'Precision', 'Recall']
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
+        
+        for i, metric in enumerate(metrics_names):
+            values = [metrics_comparison[k][i] for k in metrics_comparison.keys()]
+            axes[1, 1].bar(x + i*width, values, width, label=metric, color=colors[i])
+        
+        axes[1, 1].set_xlabel('Threshold', fontsize=11)
+        axes[1, 1].set_ylabel('Score', fontsize=11)
+        axes[1, 1].set_title('Comparación de Métricas por Threshold', fontweight='bold')
+        axes[1, 1].set_xticks(x + width * 1.5)
+        axes[1, 1].set_xticklabels(metrics_comparison.keys())
+        axes[1, 1].legend()
+        axes[1, 1].grid(True, alpha=0.3, axis='y')
+        
+        plt.tight_layout()
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close(fig)
+        
+        # --- PÁGINA 3: Matrices de Confusión ---
+        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+        fig.suptitle('Matrices de Confusión - Comparación de Thresholds', fontsize=16, fontweight='bold')
+        
+        # Matriz 1: Default
+        disp1 = ConfusionMatrixDisplay(confusion_matrix=cm_default, display_labels=target_names)
+        disp1.plot(cmap=plt.cm.Blues, ax=axes[0], values_format='d', colorbar=False)
+        axes[0].set_title(f'Threshold Default (0.5)\nAcc: {accuracy_default:.4f}', fontweight='bold')
+        
+        # Matriz 2: F1 Óptimo
+        disp2 = ConfusionMatrixDisplay(confusion_matrix=cm_f1, display_labels=target_names)
+        disp2.plot(cmap=plt.cm.Greens, ax=axes[1], values_format='d', colorbar=False)
+        axes[1].set_title(f'Threshold F1 Óptimo ({best_f1_threshold:.3f})\nAcc: {accuracy_f1:.4f}', fontweight='bold')
+        
+        # Matriz 3: Youden Óptimo
+        disp3 = ConfusionMatrixDisplay(confusion_matrix=cm_youden, display_labels=target_names)
+        disp3.plot(cmap=plt.cm.Oranges, ax=axes[2], values_format='d', colorbar=False)
+        axes[2].set_title(f'Threshold Youden ({best_youden_threshold:.3f})\nAcc: {accuracy_youden:.4f}', fontweight='bold')
+        
+        plt.tight_layout()
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close(fig)
+        
+        # --- PÁGINA 4: Classification Report - Default ---
+        fig = plt.figure(figsize=(11, 8))
+        fig.suptitle('Classification Report - Threshold Default (0.5)', fontsize=16, fontweight='bold', y=0.96)
+        
+        report_df = pd.DataFrame(report_default).transpose()
+        ax_report = fig.add_subplot(111)
+        ax_report.axis('tight')
+        ax_report.axis('off')
+        
+        report_display = report_df.copy()
+        for col in ['precision', 'recall', 'f1-score']:
+            if col in report_display.columns:
+                report_display[col] = report_display[col].apply(lambda x: f'{x:.4f}' if isinstance(x, float) else x)
+        if 'support' in report_display.columns:
+            report_display['support'] = report_display['support'].apply(lambda x: f'{int(x)}' if isinstance(x, float) else x)
+        
+        table = ax_report.table(cellText=report_display.values, colLabels=report_display.columns,
+                               rowLabels=report_display.index, cellLoc='center', rowLoc='center',
+                               loc='center', bbox=[0, 0, 1, 1])
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 2)
+        
+        for i in range(len(report_display.columns)):
+            table[(0, i)].set_facecolor('#4472C4')
+            table[(0, i)].set_text_props(weight='bold', color='white')
+        
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close(fig)
+        
+        # --- PÁGINA 5: Classification Report - F1 Óptimo ---
+        fig = plt.figure(figsize=(11, 8))
+        fig.suptitle(f'Classification Report - Threshold F1 Óptimo ({best_f1_threshold:.3f})', 
+                     fontsize=16, fontweight='bold', y=0.96)
+        
+        report_df = pd.DataFrame(report_f1).transpose()
+        ax_report = fig.add_subplot(111)
+        ax_report.axis('tight')
+        ax_report.axis('off')
+        
+        report_display = report_df.copy()
+        for col in ['precision', 'recall', 'f1-score']:
+            if col in report_display.columns:
+                report_display[col] = report_display[col].apply(lambda x: f'{x:.4f}' if isinstance(x, float) else x)
+        if 'support' in report_display.columns:
+            report_display['support'] = report_display['support'].apply(lambda x: f'{int(x)}' if isinstance(x, float) else x)
+        
+        table = ax_report.table(cellText=report_display.values, colLabels=report_display.columns,
+                               rowLabels=report_display.index, cellLoc='center', rowLoc='center',
+                               loc='center', bbox=[0, 0, 1, 1])
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 2)
+        
+        for i in range(len(report_display.columns)):
+            table[(0, i)].set_facecolor('#2ca02c')
+            table[(0, i)].set_text_props(weight='bold', color='white')
+        
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close(fig)
+        
+        # --- PÁGINA 6: Classification Report - Youden Óptimo ---
+        fig = plt.figure(figsize=(11, 8))
+        fig.suptitle(f'Classification Report - Threshold Youden ({best_youden_threshold:.3f})', 
+                     fontsize=16, fontweight='bold', y=0.96)
+        
+        report_df = pd.DataFrame(report_youden).transpose()
+        ax_report = fig.add_subplot(111)
+        ax_report.axis('tight')
+        ax_report.axis('off')
+        
+        report_display = report_df.copy()
+        for col in ['precision', 'recall', 'f1-score']:
+            if col in report_display.columns:
+                report_display[col] = report_display[col].apply(lambda x: f'{x:.4f}' if isinstance(x, float) else x)
+        if 'support' in report_display.columns:
+            report_display['support'] = report_display['support'].apply(lambda x: f'{int(x)}' if isinstance(x, float) else x)
+        
+        table = ax_report.table(cellText=report_display.values, colLabels=report_display.columns,
+                               rowLabels=report_display.index, cellLoc='center', rowLoc='center',
+                               loc='center', bbox=[0, 0, 1, 1])
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 2)
+        
+        for i in range(len(report_display.columns)):
+            table[(0, i)].set_facecolor('#ff7f0e')
+            table[(0, i)].set_text_props(weight='bold', color='white')
+        
+        plt.tight_layout(rect=[0, 0, 1, 0.95])
+        pdf.savefig(fig, bbox_inches='tight')
+        plt.close(fig)
+        
+        # Metadatos del PDF
+        d = pdf.infodict()
+        d['Title'] = 'Reporte de Evaluación con Optimización de Threshold'
+        d['Author'] = 'Sistema de Evaluación'
+        d['Subject'] = 'Análisis de Sentimientos de Medicamentos'
+        d['Keywords'] = 'Machine Learning, NLP, Threshold Optimization, Youden'
+        d['CreationDate'] = datetime.now()
+    
+    print(f"✅ PDF generado exitosamente: {output_pdf}")
+    
+    # Retornar todas las métricas
+    return {
+        'default_threshold': {
+            'threshold': 0.5,
+            'accuracy': accuracy_default,
+            'classification_report': report_default,
+            'confusion_matrix': cm_default.tolist()
+        },
+        'optimal_f1': {
+            'threshold': float(best_f1_threshold),
+            'accuracy': accuracy_f1,
+            'f1_score': f1_scores[best_f1_idx],
+            'classification_report': report_f1,
+            'confusion_matrix': cm_f1.tolist()
+        },
+        'optimal_youden': {
+            'threshold': float(best_youden_threshold),
+            'accuracy': accuracy_youden,
+            'youden_index': youden_scores[best_youden_idx],
+            'classification_report': report_youden,
+            'confusion_matrix': cm_youden.tolist()
+        },
+        'threshold_analysis': {
+            'thresholds': thresholds.tolist(),
+            'f1_scores': f1_scores,
+            'youden_scores': youden_scores
+        },
+        'predictions': all_preds.tolist(),
+        'probabilities': all_probs.tolist(),
+        'true_labels': all_labels.tolist(),
+        'pdf_path': output_pdf
+    }
+
 def compute_metrics(eval_pred):
     """
     Calcula las métricas de precisión (accuracy) y F1-score.

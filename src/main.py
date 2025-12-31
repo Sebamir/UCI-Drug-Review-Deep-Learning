@@ -6,7 +6,7 @@ from transformers import DistilBertForSequenceClassification, AutoTokenizer
 # Importar tus módulos locales
 from src.config import Config  
 from src.Trainer import full_training 
-from src.utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation, plot_loss_and_lr, ProcessingTest 
+from src.utils import ProcessingDataframe, predict_sentiment_threshold, run_detailed_evaluation_max, plot_loss_and_lr, ProcessingTest 
 from src.ui import demo
 
 def main():
@@ -72,7 +72,7 @@ def main():
 
         print("Ejecutando evaluación detallada...")
         test_dataset.set_format(type='torch', columns=['input_ids', 'attention_mask', 'labels'])
-        results = run_detailed_evaluation(
+        results = run_detailed_evaluation_max(
             model, 
             test_dataset, 
             output_pdf=config.REPORT
