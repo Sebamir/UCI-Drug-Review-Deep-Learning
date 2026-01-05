@@ -2,6 +2,9 @@ import pandas as pd
 import psycopg2
 from psycopg2.extras import execute_batch
 import time
+from config import Config
+
+config = Config()
 
 # Configuración
 DB_CONFIG = {
@@ -20,7 +23,7 @@ def ingest_data():
         print("--- 📥 Iniciando Ingesta de Datos ---")
         start_time = time.time()
 
-        file_path = "Dataset/raw/temporal/drugsComTest_raw.csv"
+        file_path = config.TEST_PATH
         
         # Lectura del CSV
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
