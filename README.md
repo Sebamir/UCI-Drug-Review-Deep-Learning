@@ -41,6 +41,32 @@ En este proyecto, la **Accuracy** fue descartada como métrica principal debido 
 * **J de Youden:** Elegida específicamente para "castigar" el sesgo del modelo y forzarlo a ser justo con la clase minoritaria (las reseñas negativas).
 
 ---
+## 🏗️ Arquitectura del Sistema (Pipeline ELT)
+
+El proyecto implementa un flujo de datos robusto diseñado para la escalabilidad y el manejo de grandes volúmenes de información:
+
+1.  **Extract (Extracción):** Ingesta de datos crudos desde archivos CSV masivos hacia **PostgreSQL**, superando desafíos de codificación (`latin-1`/`utf-8`) y limpieza de caracteres especiales.
+2.  **Load (Carga):** Almacenamiento en tablas relacionales (`raw_reviews`) para garantizar la integridad, persistencia y trazabilidad de los datos.
+3.  **Transform (Transformación con IA):** Pipeline de inferencia en Python que:
+    * Extrae registros no procesados mediante consultas SQL eficientes (`LEFT JOIN`).
+    * Aplica el modelo **DistilBERT** optimizado.
+    * Utiliza un **Umbral de Clasificación de 0.900** (basado en la Estadística J de Youden) para maximizar la detección de críticas negativas, crucial en contextos de salud.
+    * Carga los resultados en una tabla de resultados finales (`processed_reviews`).
+  
+---
+
+## 📈 Resultados y Hallazgos (Análisis de 53,000+ Registros)
+
+Tras procesar el dataset completo y generar reportes visuales, el modelo reveló hallazgos clave de farmacovigilancia:
+
+* **Distribución de Sentimientos:** Se obtuvo una distribución final de **53.0% Positivos** y **47.0% Negativos**. Esta paridad es resultado directo de la aplicación del umbral de 0.900, que prioriza no ignorar experiencias negativas.
+* **Identificación de Fármacos Críticos:** El modelo detectó que medicamentos como el **Miconazole** tienen una tasa de negatividad alarmante del **76.7%**, validando la utilidad del sistema para alertas tempranas.
+* **Análisis por Volumen:** Medicamentos de salud reproductiva como **Etonogestrel** y **Levonorgestrel** concentran el mayor volumen de interacciones, permitiendo un análisis profundo de la satisfacción del paciente en categorías específicas.
+
+---
+
+
+---
 
 ## Modos de uso
 * **Entrenamiento del modelo:**: python -m src.main --mode train.
@@ -53,32 +79,44 @@ En este proyecto, la **Accuracy** fue descartada como métrica principal debido 
 
 A continuación se detalla la organización del repositorio, siguiendo una arquitectura modular para facilitar el mantenimiento y la escalabilidad del modelo:
 ```text
+├── .venv/                                      # Entorno virtual de Python
 ├── Dataset/
 │   ├── raw/
-│   │   ├── mimic-iii-clinical-database-demo-1.4/ # Próxima fase: Datos clínicos para integración
-│   │   └── postgres/                             # Próxima fase: Almacenamiento persistente de datos clínicos
-│   └── temporal/
-│       ├── drugsComTest_raw.csv                  # Dataset de prueba original (UCI)
-│       └── drugsComTrain_raw.csv                 # Dataset de entrenamiento original (UCI)
-├── Modelo_entrenado/                             # Exportaciones del modelo en diferentes etapas
+│   │   ├── DrugReview/
+│   │   │   ├── drug_sentiment_summary.csv       # Exportación final de la View SQL
+│   │   │   ├── drugsComTest_raw.csv            # Dataset de prueba original
+│   │   │   └── drugsComTrain_raw.csv           # Dataset de entrenamiento original
+│   │   └── mimic-iii-clinical-database-demo-1.4/ # Datos clínicos para futura integración
+│   ├── postgres-DrugReview/
+│   │   └── drug_review_db                      # Scripts/Backups de la base de datos de reseñas
+│   └── postgres-mimic/                         # Scripts para la base de datos clínica
+├── Modelo_entrenado/                           # Exportaciones del modelo DistilBERT
 │   ├── drug_review_classifier_distilbert/
 │   ├── drug_review_classifier_distilbert_FINAL/
-│   └── modelo_final_consolidado/                 # Pesos finales listos para producción
-├── results/                                      # Logs y artefactos del entrenamiento
-│   ├── checkpoint-7347/                          # Puntos de control del entrenamiento
-│   ├── Evaluation/                               # Gráficas ROC, Matrices de Confusión y Reportes
-│   ├── stage_1_unfrozen/                         # Resultados del ajuste fino inicial
-│   └── stage_2_frozen/                           # Resultados del entrenamiento con capas congeladas
-├── src/                                          # Código fuente del proyecto
-│   ├── config.py                                 # Configuración de rutas, hiperparámetros y constantes
-│   ├── main.py                                   # Orquestador principal (Modos: train, testing, ui)
-│   ├── Trainer.py                                # Lógica de entrenamiento y bucles de optimización
-│   ├── ui.py                                     # Interfaz gráfica interactiva (Gradio)
-│   └── utils.py                                  # Funciones de procesamiento, métricas y Youden's J
-├── venv/                                         # Entorno virtual de Python
-├── Drug Reviews.ipynb                            # Notebook de experimentación y análisis exploratorio
-├── requirements.txt                              # Dependencias del proyecto (Transformers, Torch, Gradio)
-└── .gitignore                                    # Archivos excluidos de control de versiones
+│   └── modelo_final_consolidado/               # Pesos listos para producción
+├── results/                                    # Logs y resultados del entrenamiento
+│   ├── checkpoint-7347/
+│   ├── Evaluation/
+│   │   ├── Graficos analisis TestData/         # Reportes visuales generados
+│   │   │   ├── reporte_1_negatividad_absoluta.png
+│   │   │   ├── reporte_2_porcentaje_negatividad.png
+│   │   │   ├── reporte_3_comparacion_sentimientos.png
+│   │   │   ├── reporte_4_distribucion_general.png
+│   │   │   └── reporte_5_heatmap.png
+│   │   └── evaluacion-modelo-final.pdf         # Informe consolidado
+│   ├── stage_1_unfrozen/
+│   └── stage_2_frozen/
+├── src/                                        # Código fuente del sistema
+│   ├── __pycache__/
+│   ├── __init__.py
+│   ├── cargar_datos.py                         # Ingesta: CSV -> PostgreSQL
+│   ├── comunicación_sql_ia.py                   # Pipeline ELT: Inferencia e integración DB
+│   ├── config.py                               # Hiperparámetros y rutas
+│   ├── main.py                                 # Orquestador del proyecto
+│   └── Trainer.py                              # Lógica de entrenamiento
+├── Drug Reviews.ipynb                          # Notebook de experimentación
+├── requirements.txt                            # Dependencias del proyecto
+└── .gitignore                                  # Archivos excluidos
 ```
 ---
 
